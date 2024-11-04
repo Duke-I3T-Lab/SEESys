@@ -1,0 +1,17 @@
+ipdb
+tqdm
+xlrd
+pandas
+xlutils
+tabulate
+xlwt
+torch
+torchvision
+tensorboard
+matplotlib
+numpy
+scikit_learn
+tsaug
+#sktime==0.4.1
+transformers==4.36.1
+
