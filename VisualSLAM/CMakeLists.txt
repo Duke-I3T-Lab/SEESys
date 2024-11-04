@@ -9,36 +9,41 @@ MESSAGE("Build type: " ${CMAKE_BUILD_TYPE})
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  -Wall   -O3")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall   -O3")
-set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -march=native")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
+
+#set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -march=native")
+#set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
+set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+
+
 
 # Check C++11 or C++0x support
 include(CheckCXXCompilerFlag)
+CHECK_CXX_COMPILER_FLAG("-std=c++14" COMPILER_SUPPORTS_CXX14)
 CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
-CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
-if(COMPILER_SUPPORTS_CXX11)
+if(COMPILER_SUPPORTS_CXX14)
+   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
+   add_definitions(-DCOMPILEDWITHC14)
+   message(STATUS "Using flag -std=c++14.")
+elseif(COMPILER_SUPPORTS_CXX11)
    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
    add_definitions(-DCOMPILEDWITHC11)
    message(STATUS "Using flag -std=c++11.")
-elseif(COMPILER_SUPPORTS_CXX0X)
-   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
-   add_definitions(-DCOMPILEDWITHC0X)
-   message(STATUS "Using flag -std=c++0x.")
 else()
-   message(FATAL_ERROR "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
+   message(FATAL_ERROR "The compiler ${CMAKE_CXX_COMPILER} has no C++14 support. Please use a different C++ compiler.")
 endif()
 
 LIST(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
 
-find_package(OpenCV 4.4)
+find_package(OpenCV 4 REQUIRED)
    if(NOT OpenCV_FOUND)
-      message(FATAL_ERROR "OpenCV > 4.4 not found.")
+      message(FATAL_ERROR "OpenCV >= 4 not found.")
    endif()
 
 MESSAGE("OPENCV VERSION:")
 MESSAGE(${OpenCV_VERSION})
 
-find_package(Eigen3 3.1.0 REQUIRED)
+find_package(Eigen3 3.3 REQUIRED)
 find_package(Pangolin REQUIRED)
 find_package(realsense2)
 
@@ -82,6 +87,10 @@ src/GeometricTools.cc
 src/TwoViewReconstruction.cc
 src/Config.cc
 src/Settings.cc
+src/DataCollecting.cpp
+src/UdpSender.cpp
+src/TCPClient.cpp
+src/UdpPointDistSender.cpp
 include/System.h
 include/Tracking.h
 include/LocalMapping.h
@@ -111,7 +120,12 @@ include/GeometricTools.h
 include/TwoViewReconstruction.h
 include/SerializationUtils.h
 include/Config.h
-include/Settings.h)
+include/Settings.h
+include/DataCollecting.h
+include/UdpSender.h
+include/TCPClient.h
+include/UdpPointDistSender.h
+)
 
 add_subdirectory(Thirdparty/g2o)
 
