@@ -24,6 +24,7 @@
 #include "Atlas.h"
 #include "LoopClosing.h"
 #include "Tracking.h"
+#include "DataCollecting.h"
 #include "KeyFrameDatabase.h"
 #include "Settings.h"
 
@@ -36,6 +37,9 @@ namespace ORB_SLAM3
 class System;
 class Tracking;
 class LoopClosing;
+//Added for data collection
+class DataCollecting;
+
 class Atlas;
 
 class LocalMapping
@@ -47,6 +51,8 @@ public:
     void SetLoopCloser(LoopClosing* pLoopCloser);
 
     void SetTracker(Tracking* pTracker);
+
+    void SetDataCollector(DataCollecting *pDataCollector);
 
     // Main function
     void Run();
@@ -160,6 +166,8 @@ protected:
 
     LoopClosing* mpLoopCloser;
     Tracking* mpTracker;
+    //Added for data collector
+    DataCollecting* mpDataCollector;
 
     std::list<KeyFrame*> mlNewKeyFrames;
 

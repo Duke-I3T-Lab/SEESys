@@ -28,6 +28,7 @@
 #include "Atlas.h"
 #include "LocalMapping.h"
 #include "LoopClosing.h"
+#include "DataCollecting.h"
 #include "Frame.h"
 #include "ORBVocabulary.h"
 #include "KeyFrameDatabase.h"
@@ -50,6 +51,9 @@ class FrameDrawer;
 class Atlas;
 class LocalMapping;
 class LoopClosing;
+//Added for data collection
+class DataCollecting;
+
 class System;
 class Settings;
 
@@ -77,6 +81,9 @@ public:
 
     void SetLocalMapper(LocalMapping* pLocalMapper);
     void SetLoopClosing(LoopClosing* pLoopClosing);
+    //Added for data collector
+    void SetDataCollector(DataCollecting *pDataCollector);
+
     void SetViewer(Viewer* pViewer);
     void SetStepByStep(bool bSet);
     bool GetStepByStep();
@@ -256,6 +263,8 @@ protected:
     //Other Thread Pointers
     LocalMapping* mpLocalMapper;
     LoopClosing* mpLoopClosing;
+    //Added for data collector
+    DataCollecting* mpDataCollector;
 
     //ORB
     ORBextractor* mpORBextractorLeft, *mpORBextractorRight;

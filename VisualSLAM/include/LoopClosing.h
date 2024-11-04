@@ -22,6 +22,7 @@
 
 #include "KeyFrame.h"
 #include "LocalMapping.h"
+#include "DataCollecting.h"
 #include "Atlas.h"
 #include "ORBVocabulary.h"
 #include "Tracking.h"
@@ -38,6 +39,9 @@ namespace ORB_SLAM3
 
 class Tracking;
 class LocalMapping;
+//Added for data collection
+class DataCollecting;
+
 class KeyFrameDatabase;
 class Map;
 
@@ -57,6 +61,9 @@ public:
     void SetTracker(Tracking* pTracker);
 
     void SetLocalMapper(LocalMapping* pLocalMapper);
+
+    //Added for data collector
+    void SetDataCollector(DataCollecting *pDataCollector);
 
     // Main function
     void Run();
@@ -163,6 +170,9 @@ protected:
     ORBVocabulary* mpORBVocabulary;
 
     LocalMapping *mpLocalMapper;
+
+    //Added for data collector
+    DataCollecting* mpDataCollector;
 
     std::list<KeyFrame*> mlpLoopKeyFrameQueue;
 

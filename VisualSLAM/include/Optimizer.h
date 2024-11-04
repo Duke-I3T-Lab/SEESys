@@ -25,6 +25,8 @@
 #include "KeyFrame.h"
 #include "LoopClosing.h"
 #include "Frame.h"
+// Data Collection
+#include "DataCollecting.h"
 
 #include <math.h>
 
@@ -42,19 +44,32 @@ namespace ORB_SLAM3
 {
 
 class LoopClosing;
+class DataCollecting;
 
 class Optimizer
 {
 public:
+
 
     void static BundleAdjustment(const std::vector<KeyFrame*> &vpKF, const std::vector<MapPoint*> &vpMP,
                                  int nIterations = 5, bool *pbStopFlag=NULL, const unsigned long nLoopKF=0,
                                  const bool bRobust = true);
     void static GlobalBundleAdjustemnt(Map* pMap, int nIterations=5, bool *pbStopFlag=NULL,
                                        const unsigned long nLoopKF=0, const bool bRobust = true);
+    // Data collection: function overloading
+    void static BundleAdjustment(const std::vector<KeyFrame*> &vpKF, const std::vector<MapPoint*> &vpMP, DataCollecting *pDataCollector,
+                                 int nIterations = 5, bool *pbStopFlag=NULL, const unsigned long nLoopKF=0,
+                                 const bool bRobust = true);
+    void static GlobalBundleAdjustemnt(Map* pMap, DataCollecting *pDataCollector, int nIterations=5, bool *pbStopFlag=NULL,
+                                       const unsigned long nLoopKF=0, const bool bRobust = true);
+
+
     void static FullInertialBA(Map *pMap, int its, const bool bFixLocal=false, const unsigned long nLoopKF=0, bool *pbStopFlag=NULL, bool bInit=false, float priorG = 1e2, float priorA=1e6, Eigen::VectorXd *vSingVal = NULL, bool *bHess=NULL);
 
     void static LocalBundleAdjustment(KeyFrame* pKF, bool *pbStopFlag, Map *pMap, int& num_fixedKF, int& num_OptKF, int& num_MPs, int& num_edges);
+    // Data collection: function overloading
+    void static LocalBundleAdjustment(KeyFrame* pKF, bool *pbStopFlag, Map *pMap, int& num_fixedKF, int& num_OptKF,\
+                                      int& num_MPs, int& num_edges, DataCollecting *pDataCollector);
 
     int static PoseOptimization(Frame* pFrame);
     int static PoseInertialOptimizationLastKeyFrame(Frame* pFrame, bool bRecInit = false);
@@ -84,6 +99,10 @@ public:
     // For inertial systems
 
     void static LocalInertialBA(KeyFrame* pKF, bool *pbStopFlag, Map *pMap, int& num_fixedKF, int& num_OptKF, int& num_MPs, int& num_edges, bool bLarge = false, bool bRecInit = false);
+    // Data collection: function overloading
+    void static LocalInertialBA(KeyFrame* pKF, bool *pbStopFlag, Map *pMap, int& num_fixedKF, int& num_OptKF, \
+                                int& num_MPs, int& num_edges, DataCollecting *pDataCollector, bool bLarge = false, bool bRecInit = false);
+
     void static MergeInertialBA(KeyFrame* pCurrKF, KeyFrame* pMergeKF, bool *pbStopFlag, Map *pMap, LoopClosing::KeyFrameAndPose &corrPoses);
 
     // Local BA in welding area when two maps are merged
@@ -99,6 +118,7 @@ public:
     void static InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &scale);
 
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+
 };
 
 } //namespace ORB_SLAM3

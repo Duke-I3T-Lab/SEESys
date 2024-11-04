@@ -19,6 +19,8 @@
 
 #include "LocalMapping.h"
 #include "LoopClosing.h"
+#include "DataCollecting.h"
+
 #include "ORBmatcher.h"
 #include "Optimizer.h"
 #include "Converter.h"
@@ -59,6 +61,12 @@ void LocalMapping::SetLoopCloser(LoopClosing* pLoopCloser)
 void LocalMapping::SetTracker(Tracking *pTracker)
 {
     mpTracker=pTracker;
+}
+
+//Added for data collector
+void LocalMapping::SetDataCollector(DataCollecting *pDataCollector)
+{
+    mpDataCollector=pDataCollector;
 }
 
 void LocalMapping::Run()
@@ -151,11 +159,20 @@ void LocalMapping::Run()
                     }
                     else
                     {
-                        Optimizer::LocalBundleAdjustment(mpCurrentKeyFrame,&mbAbortBA, mpCurrentKeyFrame->GetMap(),num_FixedKF_BA,num_OptKF_BA,num_MPs_BA,num_edges_BA);
+                        // Data collection
+                        // comment out the original Optimizer::LocalBundleAdjustment
+                        //Optimizer::LocalBundleAdjustment(mpCurrentKeyFrame,&mbAbortBA, mpCurrentKeyFrame->GetMap(),num_FixedKF_BA,num_OptKF_BA,num_MPs_BA,num_edges_BA);
+                        // use the one has overloaded with data collector
+                        Optimizer::LocalBundleAdjustment(mpCurrentKeyFrame,&mbAbortBA, mpCurrentKeyFrame->GetMap(),\
+                                                         num_FixedKF_BA,num_OptKF_BA,num_MPs_BA,num_edges_BA, mpDataCollector);
                         b_doneLBA = true;
                     }
 
+                    // Data collection
+                    mpDataCollector->CollectLocalMappingBANumber(num_FixedKF_BA,num_OptKF_BA,num_MPs_BA,num_edges_BA);
+
                 }
+
 #ifdef REGISTER_TIMES
                 std::chrono::steady_clock::time_point time_EndLBA = std::chrono::steady_clock::now();
 
@@ -301,6 +318,9 @@ void LocalMapping::ProcessNewKeyFrame()
         unique_lock<mutex> lock(mMutexNewKFs);
         mpCurrentKeyFrame = mlNewKeyFrames.front();
         mlNewKeyFrames.pop_front();
+
+        // Data collection
+        mpDataCollector->CollectLocalMappingNewKFinQueue(mlNewKeyFrames.size());
     }
 
     // Compute Bags of Words structures
@@ -382,6 +402,8 @@ void LocalMapping::MapPointCulling()
             borrar--;
         }
     }
+
+
 }
 
 

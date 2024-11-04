@@ -39,6 +39,7 @@
 #include "Viewer.h"
 #include "ImuTypes.h"
 #include "Settings.h"
+#include "DataCollecting.h"
 
 
 namespace ORB_SLAM3
@@ -78,6 +79,9 @@ class Atlas;
 class Tracking;
 class LocalMapping;
 class LoopClosing;
+//Added for data collection
+class DataCollecting;
+
 class Settings;
 
 class System
@@ -224,17 +228,22 @@ private:
     // a pose graph optimization and full bundle adjustment (in a new thread) afterwards.
     LoopClosing* mpLoopCloser;
 
+    //Added for DataCollector
+    DataCollecting* mpDataCollector;
+
     // The viewer draws the map and the current camera pose. It uses Pangolin.
     Viewer* mpViewer;
 
     FrameDrawer* mpFrameDrawer;
     MapDrawer* mpMapDrawer;
 
-    // System threads: Local Mapping, Loop Closing, Viewer.
+    // System threads: Local Mapping, Loop Closing, Viewer + Data Collector
     // The Tracking thread "lives" in the main execution thread that creates the System object.
     std::thread* mptLocalMapping;
     std::thread* mptLoopClosing;
     std::thread* mptViewer;
+    //Added for DataCollector
+    std::thread* mptDataCollecting;
 
     // Reset flag
     std::mutex mMutexReset;
