@@ -1434,6 +1434,12 @@ void Tracking::SetLoopClosing(LoopClosing *pLoopClosing)
     mpLoopClosing=pLoopClosing;
 }
 
+//Added for data collector
+void Tracking::SetDataCollector(DataCollecting *pDataCollector)
+{
+    mpDataCollector=pDataCollector;
+}
+
 void Tracking::SetViewer(Viewer *pViewer)
 {
     mpViewer=pViewer;
@@ -1565,6 +1571,12 @@ Sophus::SE3f Tracking::GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, co
 
 Sophus::SE3f Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp, string filename)
 {
+    // Need to collect timestamp before collecting img
+    // Data Collection: Collect timestamp
+    mpDataCollector->CollectImageTimeStamp(mCurrentFrame.mTimeStamp);
+    //cout << "Image File Name: " << filename << endl;
+    mpDataCollector->CollectImageFileName(filename);
+
     mImGray = im;
     if(mImGray.channels()==3)
     {
@@ -1580,6 +1592,12 @@ Sophus::SE3f Tracking::GrabImageMonocular(const cv::Mat &im, const double &times
         else
             cvtColor(mImGray,mImGray,cv::COLOR_BGRA2GRAY);
     }
+
+
+    // Collect image pixel
+    // After the tracking module convert the RGB(D) image to grayscale image
+    // Copy it to the data collector module
+    mpDataCollector->CollectImagePixel(mImGray);
 
     if (mSensor == System::MONOCULAR)
     {
@@ -1609,7 +1627,21 @@ Sophus::SE3f Tracking::GrabImageMonocular(const cv::Mat &im, const double &times
 #endif
 
     lastID = mCurrentFrame.mnId;
+
     Track();
+
+    // Collect the current frame
+    // After the tracking module run the "Track()" method
+    // Copy it to the data collector module
+    mpDataCollector->CollectCurrentFrame(mCurrentFrame);
+    //cout << "Current Time" << std::setprecision (20) << timestamp << endl;
+
+    long int totalNumKF = 0;
+    for (auto & map : mpAtlas->GetAllMaps()) {
+        totalNumKF += map->KeyFramesInMap();
+    }
+    mpDataCollector->CollectTotalNumKeyFrames(totalNumKF);
+    // cout << "Total num of KF: " << totalNumKF << endl;
 
     return mCurrentFrame.GetPose();
 }
@@ -1938,6 +1970,9 @@ void Tracking::Track()
             // you explicitly activate the "only tracking" mode.
             if(mState==OK)
             {
+                // Data collection: TrackMotionModel-1; TrackReferenceFrame-2; TrackRelocalization-3;
+                // Initialize the track method as 0
+                mpDataCollector->CollectCurrentFrameTrackMethod(0);
 
                 // Local Mapping might have changed some MapPoints tracked in last frame
                 CheckReplacedInLastFrame();
@@ -1946,18 +1981,39 @@ void Tracking::Track()
                 {
                     Verbose::PrintMess("TRACK: Track with respect to the reference KF ", Verbose::VERBOSITY_DEBUG);
                     bOK = TrackReferenceKeyFrame();
+
+                    // Data collection: TrackMotionModel-1; TrackReferenceFrame-2; TrackRelocalization-3;
+                    if(bOK)
+                    {
+                        mpDataCollector->CollectCurrentFrameTrackMethod(2);
+                    }
                 }
                 else
                 {
                     Verbose::PrintMess("TRACK: Track with motion model", Verbose::VERBOSITY_DEBUG);
                     bOK = TrackWithMotionModel();
                     if(!bOK)
+                    {
+                        // TrackMotionModel Failed --> Try TrackReferenceKeyframe
                         bOK = TrackReferenceKeyFrame();
+                        // Data collection: TrackMotionModel-1; TrackReferenceFrame-2; TrackRelocalization-3;
+                        if(bOK)
+                        {
+                            mpDataCollector->CollectCurrentFrameTrackMethod(2);
+                        }
+                    }
+                    else
+                    {
+                        // TrackMotionModel Success
+                        // Data collection: TrackMotionModel-1; TrackReferenceFrame-2; TrackRelocalization-3;
+                        mpDataCollector->CollectCurrentFrameTrackMethod(1);
+                    }
                 }
-
 
                 if (!bOK)
                 {
+                    // Comment: If still !bOK here --> Both MotionModel and ReferenceKeyframe Failed --> Lost Tracking
+
                     if ( mCurrentFrame.mnId<=(mnLastRelocFrameId+mnFramesToResetIMU) &&
                          (mSensor==System::IMU_MONOCULAR || mSensor==System::IMU_STEREO || mSensor == System::IMU_RGBD))
                     {
@@ -2001,6 +2057,12 @@ void Tracking::Track()
                     {
                         // Relocalization
                         bOK = Relocalization();
+                        // Data collection: TrackMotionModel-1; TrackReferenceFrame-2; TrackRelocalization-3;
+                        if(bOK)
+                        {
+                            mpDataCollector->CollectCurrentFrameTrackMethod(3);
+                        }
+
                         //std::cout << "mCurrentFrame.mTimeStamp:" << to_string(mCurrentFrame.mTimeStamp) << std::endl;
                         //std::cout << "mTimeStampLost:" << to_string(mTimeStampLost) << std::endl;
                         if(mCurrentFrame.mTimeStamp-mTimeStampLost>3.0f && !bOK)
@@ -2041,6 +2103,11 @@ void Tracking::Track()
                 if(mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD)
                     Verbose::PrintMess("IMU. State LOST", Verbose::VERBOSITY_NORMAL);
                 bOK = Relocalization();
+                // Data collection: TrackMotionModel-1; TrackReferenceFrame-2; TrackRelocalization-3;
+                if(bOK)
+                {
+                    mpDataCollector->CollectCurrentFrameTrackMethod(3);
+                }
             }
             else
             {
@@ -2050,10 +2117,20 @@ void Tracking::Track()
                     if(mbVelocity)
                     {
                         bOK = TrackWithMotionModel();
+                        // Data collection: TrackMotionModel-1; TrackReferenceFrame-2; TrackRelocalization-3;
+                        if(bOK)
+                        {
+                            mpDataCollector->CollectCurrentFrameTrackMethod(1);
+                        }
                     }
                     else
                     {
                         bOK = TrackReferenceKeyFrame();
+                        // Data collection: TrackMotionModel-1; TrackReferenceFrame-2; TrackRelocalization-3;
+                        if(bOK)
+                        {
+                            mpDataCollector->CollectCurrentFrameTrackMethod(2);
+                        }
                     }
                 }
                 else
@@ -2080,6 +2157,9 @@ void Tracking::Track()
 
                     if(bOKMM && !bOKReloc)
                     {
+                        // Data collection: TrackMotionModel-1; TrackReferenceFrame-2; TrackRelocalization-3;
+                        mpDataCollector->CollectCurrentFrameTrackMethod(1);
+
                         mCurrentFrame.SetPose(TcwMM);
                         mCurrentFrame.mvpMapPoints = vpMPsMM;
                         mCurrentFrame.mvbOutlier = vbOutMM;
@@ -2098,6 +2178,8 @@ void Tracking::Track()
                     else if(bOKReloc)
                     {
                         mbVO = false;
+                        // Data collection: TrackMotionModel-1; TrackReferenceFrame-2; TrackRelocalization-3;
+                        mpDataCollector->CollectCurrentFrameTrackMethod(3);
                     }
 
                     bOK = bOKReloc || bOKMM;
@@ -2265,7 +2347,13 @@ void Tracking::Track()
                 if(mCurrentFrame.mvpMapPoints[i] && mCurrentFrame.mvbOutlier[i])
                     mCurrentFrame.mvpMapPoints[i]=static_cast<MapPoint*>(NULL);
             }
+
+            // Data Collection: Collect the map point depth data
+            mpDataCollector->CollectCurrentFrameMapPointDepth(mCurrentFrame);
+
         }
+
+        
 
         // Reset if the camera get lost soon after initialization
         if(mState==LOST)
@@ -2329,6 +2417,166 @@ void Tracking::Track()
         }
     }
 #endif
+
+    if(true){
+        cv::Mat distributionMatrix(FRAME_GRID_ROWS*2, FRAME_GRID_COLS*2, CV_8UC3, cv::Scalar(0, 0, 0));
+
+        for(int i=0;i<FRAME_GRID_ROWS;i++) {
+            for(int j=0; j<FRAME_GRID_COLS; j++){
+                // for(std::size_t k = 0; k < mCurrentFrame.mGrid[i][j].size(); k++) {
+                //     std::cout << mCurrentFrame.mGrid[i][j][k] << " ";
+                // }
+                size_t number = mCurrentFrame.mGrid[j][i].size();
+                if(number > 0){
+                    int row = i+int(FRAME_GRID_ROWS/2);
+                    int col = j+int(FRAME_GRID_COLS/2);
+
+                    // Create a vector/list for saving the response of each keypoint
+                    std::vector<float> responseVector;
+                    // Iterate over the keypoints in the current grid
+                    for (std::size_t idx : mCurrentFrame.mGrid[j][i]) {
+                        responseVector.push_back(mCurrentFrame.mvKeys[idx].response);
+                    }
+
+                    // Calculate the sum of all elements
+                    float sum = std::accumulate(responseVector.begin(), responseVector.end(), 0.0f);
+
+                    // Calculate the average
+                    float average = sum / responseVector.size();
+
+                    // Convert the average to an integer
+                    int averageResponse = static_cast<int>(average);
+
+                    if(averageResponse > 255){
+                        averageResponse = 255;
+                    }
+
+
+                    distributionMatrix.at<cv::Vec3b>(row, col)[0] = averageResponse; // Blue
+                }
+            }
+        }
+
+        for(int i = 0; i < mCurrentFrame.N; i++){
+            //if(mCurrentFrame.mvpMapPoints[i] && !mCurrentFrame.mvbOutlier[i]){
+            if(mCurrentFrame.mvpMapPoints[i] && !mCurrentFrame.mvbOutlier[i]){
+                // devided by 10 for 640*480 --> 64*48
+                int x = static_cast<int>(mCurrentFrame.mvKeys[i].pt.x/10.0);
+                int y = static_cast<int>(mCurrentFrame.mvKeys[i].pt.y/10.0);
+
+                int row = y+int(FRAME_GRID_ROWS/2);
+                int col = x+int(FRAME_GRID_COLS/2);
+                distributionMatrix.at<cv::Vec3b>(row, col)[1] = 255; // Green
+            }
+        }
+
+        // Comment: mvpLocalMapPoints contains ALL the local mappoints
+        cv::Mat adjacentMapPointMatrix(FRAME_GRID_ROWS*2, FRAME_GRID_COLS*2, CV_8U, cv::Scalar(0));
+        // Project points in frame and check its visibility
+        for(vector<MapPoint*>::iterator vit=mvpLocalMapPoints.begin(), vend=mvpLocalMapPoints.end(); vit!=vend; vit++)
+        {
+            MapPoint* pMP = *vit;
+
+            if(pMP->isBad())
+                continue;
+
+            // Initialize
+            bool bTrackInView = false;
+            float TrackProjX = -1000.0;
+            float TrackProjY = -1000.0;
+
+            // 3D in absolute coordinates
+            Eigen::Matrix<float,3,1> P = pMP->GetWorldPos();
+
+            // Check distance is in the scale invariance region of the MapPoint
+            const float maxDistance = pMP->GetMaxDistanceInvariance();
+            const float minDistance = pMP->GetMinDistanceInvariance();
+
+            const Eigen::Vector3f Ow = mCurrentFrame.GetOw();
+            const Eigen::Vector3f PO = P - Ow;
+            const float dist = PO.norm();
+
+            if(dist<minDistance || dist>maxDistance){
+                //return false;
+                continue;
+            }
+
+            // 3D in camera coordinates
+            //const Eigen::Matrix<float,3,1> Pc = mRcw * P + mtcw;
+            const Eigen::Matrix<float,3,1> Pc = mCurrentFrame.inRefCoordinates(P);
+
+            const float Pc_dist = Pc.norm();
+
+            // Check positive depth
+            const float &PcZ = Pc(2);
+            const float invz = 1.0f/PcZ;
+
+            // The map point has to be infront of the camera
+            if(PcZ<0.0f)
+            {
+                // skip current map point
+                continue;
+            }
+
+            const Eigen::Vector2f uv = mpCamera->project(Pc);
+
+            // if(uv(0)<mnMinX || uv(0)>mnMaxX)
+            //     return false;
+            // if(uv(1)<mnMinY || uv(1)>mnMaxY)
+            //     return false;
+            if (std::isnan(uv(0)) || std::isnan(uv(1))){
+                continue;
+            }
+
+            if(uv(0)<-320 || uv(0)>960){
+                //bTrackInView = false;
+                continue;
+            }
+            if(uv(1)<-240 || uv(1)>720){
+                //bTrackInView = false;
+                continue;
+            }
+
+            // Check viewing angle
+            Eigen::Vector3f Pn = pMP->GetNormal();
+            const float viewCos = PO.dot(Pn)/dist;
+
+            // viewingCosLimit = 0.6
+            if(viewCos<0.6){
+                //return false;
+                continue;
+            }
+            bTrackInView = true;
+
+
+            // Project (this fills MapPoint variables for matching)
+            if(bTrackInView){
+                TrackProjX = uv(0);
+                TrackProjY = uv(1);
+                //cout << " X: " << TrackProjX;
+                //cout << " Y: " << TrackProjY << endl;
+
+                int x = static_cast<int>((TrackProjX+320.0)/10.0);
+                int y = static_cast<int>((TrackProjY+240.0)/10.0);
+                //cout << " x: " << x;
+                //cout << " y: " << y << endl;
+                //distributionMatrix.at<cv::Vec3b>(y, x)[2] = 255; //PcZ
+                //distributionMatrix.at<cv::Vec3b>(y, x)[2] = 150*PcZ;
+                distributionMatrix.at<cv::Vec3b>(y, x)[2] = 255/(1.0+PcZ);
+            }
+        }
+
+        // Create a window
+//        cv::namedWindow("Distribution", cv::WINDOW_AUTOSIZE);
+//        // Display the updated matrix
+//        cv::Mat displayMatrix;
+//        int scale_factor = 10;
+//        cv::resize(distributionMatrix, displayMatrix, cv::Size(FRAME_GRID_COLS * scale_factor, FRAME_GRID_ROWS * scale_factor),0, 0, cv::INTER_NEAREST);
+//        cv::imshow("Distribution", displayMatrix);
+        //cv::waitKey(1);
+        mpDataCollector->CollectDistribution(distributionMatrix);
+    }
+
 }
 
 
@@ -2966,6 +3214,10 @@ bool Tracking::TrackLocalMap()
                 aux2++;
         }
 
+    // Data Collection: Collect features before Pose Optimization
+    mpDataCollector->CollectCurrentFramePrePOKeyMapLoss(aux1);
+    mpDataCollector->CollectCurrentFramePrePOOutlier(aux2);
+
     int inliers;
     if (!mpAtlas->isImuInitialized())
         Optimizer::PoseOptimization(&mCurrentFrame);
@@ -2989,6 +3241,9 @@ bool Tracking::TrackLocalMap()
                 Verbose::PrintMess("TLM: PoseInertialOptimizationLastKeyFrame ", Verbose::VERBOSITY_DEBUG);
                 inliers = Optimizer::PoseInertialOptimizationLastKeyFrame(&mCurrentFrame); // , !mpLastKeyFrame->GetMap()->GetIniertialBA1());
             }
+
+            // Data Collection: Collect features before Pose Optimization
+            mpDataCollector->CollectCurrentFrameInlier(inliers);
         }
     }
 
@@ -3000,6 +3255,10 @@ bool Tracking::TrackLocalMap()
             if(mCurrentFrame.mvbOutlier[i])
                 aux2++;
         }
+
+    // Data Collection: Collect features after Pose Optimization
+    mpDataCollector->CollectCurrentFramePostPOKeyMapLoss(aux1);
+    mpDataCollector->CollectCurrentFramePostPOOutlier(aux2);
 
     mnMatchesInliers = 0;
 
@@ -3023,6 +3282,8 @@ bool Tracking::TrackLocalMap()
                 mCurrentFrame.mvpMapPoints[i] = static_cast<MapPoint*>(NULL);
         }
     }
+
+    mpDataCollector->CollectCurrentFrameMatchedInlier(mnMatchesInliers);
 
     // Decide if the tracking was succesful
     // More restrictive if there was a relocalization recently
@@ -3138,7 +3399,7 @@ bool Tracking::NeedNewKeyFrame()
         //Pseudo-monocular, there are not enough close points to be confident about the stereo observations.
         thRefRatio = 0.9f;
     }*/
-
+    /* CHANGE THIS FOR TESTING */ 
     if(mSensor==System::MONOCULAR)
         thRefRatio = 0.9f;
 
@@ -3151,11 +3412,21 @@ bool Tracking::NeedNewKeyFrame()
         else
             thRefRatio = 0.90f;
     }
+    
+    // CHANGE FOR TESTING MINFRAME
+    int mMinFrameInterval = 0; 
+    // CHANGE FOR TESTING MAXFRAME
+    int mMaxFrameInterval = 60;
+    mMaxFrameInterval = mpDataCollector->GetActionMaxFrames();
+    mMinFrameInterval = mpDataCollector->GetActionMinFrames();
+    thRefRatio = mpDataCollector->GetActionThRefRatio();
+    //cout << "thRefRatio: " << thRefRatio << endl;
+
 
     // Condition 1a: More than "MaxFrames" have passed from last keyframe insertion
-    const bool c1a = mCurrentFrame.mnId>=mnLastKeyFrameId+mMaxFrames;
-    // Condition 1b: More than "MinFrames" have passed and Local Mapping is idle
-    const bool c1b = ((mCurrentFrame.mnId>=mnLastKeyFrameId+mMinFrames) && bLocalMappingIdle); //mpLocalMapper->KeyframesInQueue() < 2);
+    const bool c1a = mCurrentFrame.mnId>=mnLastKeyFrameId+mMaxFrameInterval;
+    // Condition 1b: More than "MinFrameInterval" have passed and Local Mapping is idle
+    const bool c1b = ((mCurrentFrame.mnId>=mnLastKeyFrameId+mMinFrameInterval) && bLocalMappingIdle); //mpLocalMapper->KeyframesInQueue() < 2);
     //Condition 1c: tracking is weak
     const bool c1c = mSensor!=System::MONOCULAR && mSensor!=System::IMU_MONOCULAR && mSensor!=System::IMU_STEREO && mSensor!=System::IMU_RGBD && (mnMatchesInliers<nRefMatches*0.25 || bNeedToInsertClose) ;
     // Condition 2: Few tracked points compared to reference keyframe. Lots of visual odometry compared to map matches.

@@ -185,11 +185,21 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     mpFrameDrawer = new FrameDrawer(mpAtlas);
     mpMapDrawer = new MapDrawer(mpAtlas, strSettingsFile, settings_);
 
+    //Initialize the Data Collecting thread and launch
+    mpDataCollector = new DataCollecting(this, mpAtlas, mSensor==MONOCULAR || mSensor==IMU_MONOCULAR,
+                                         mSensor==IMU_MONOCULAR || mSensor==IMU_STEREO || mSensor==IMU_RGBD, strSequence);
+    mptDataCollecting = new thread(&ORB_SLAM3::DataCollecting::Run,mpDataCollector);
+
+
     //Initialize the Tracking thread
     //(it will live in the main thread of execution, the one that called this constructor)
     cout << "Seq. Name: " << strSequence << endl;
     mpTracker = new Tracking(this, mpVocabulary, mpFrameDrawer, mpMapDrawer,
                              mpAtlas, mpKeyFrameDatabase, strSettingsFile, mSensor, settings_, strSequence);
+    // Need to setup the data collector pointer in tracking right after the tracking is initialized
+    mpTracker->SetDataCollector(mpDataCollector);
+    cout << "Initialized Tracking Thread" << endl;
+
 
     //Initialize the Local Mapping thread and launch
     mpLocalMapper = new LocalMapping(this, mpAtlas, mSensor==MONOCULAR || mSensor==IMU_MONOCULAR,
@@ -207,21 +217,34 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     }
     else
         mpLocalMapper->mbFarPoints = false;
+    cout << "Initialized Local Mapping Thread" << endl;
 
     //Initialize the Loop Closing thread and launch
     // mSensor!=MONOCULAR && mSensor!=IMU_MONOCULAR
     mpLoopCloser = new LoopClosing(mpAtlas, mpKeyFrameDatabase, mpVocabulary, mSensor!=MONOCULAR, activeLC); // mSensor!=MONOCULAR);
     mptLoopClosing = new thread(&ORB_SLAM3::LoopClosing::Run, mpLoopCloser);
+    cout << "Initialized LoopClosing Thread" << endl;
 
     //Set pointers between threads
+    //Modified for data collector
     mpTracker->SetLocalMapper(mpLocalMapper);
     mpTracker->SetLoopClosing(mpLoopCloser);
+    mpTracker->SetDataCollector(mpDataCollector);
 
     mpLocalMapper->SetTracker(mpTracker);
     mpLocalMapper->SetLoopCloser(mpLoopCloser);
+    mpLocalMapper->SetDataCollector(mpDataCollector);
 
     mpLoopCloser->SetTracker(mpTracker);
     mpLoopCloser->SetLocalMapper(mpLocalMapper);
+    mpLoopCloser->SetDataCollector(mpDataCollector);
+
+    //Added for Data Collector
+    mpDataCollector->SetTracker(mpTracker);
+    mpDataCollector->SetLocalMapper(mpLocalMapper);
+    mpDataCollector->SetLoopCloser(mpLoopCloser);
+
+    cout << "Shared thread pointer among threads" << endl;
 
     //usleep(10*1000*1000);
 
@@ -470,6 +493,9 @@ Sophus::SE3f System::TrackMonocular(const cv::Mat &im, const double &timestamp, 
     mTrackedMapPoints = mpTracker->mCurrentFrame.mvpMapPoints;
     mTrackedKeyPointsUn = mpTracker->mCurrentFrame.mvKeysUn;
 
+    // Data Collection: Collect Track Mode - Reference Key Frame
+    mpDataCollector->CollectCurrentFrameTrackMode(mTrackingState);
+
     return Tcw;
 }
 
@@ -523,6 +549,9 @@ void System::Shutdown()
 
     mpLocalMapper->RequestFinish();
     mpLoopCloser->RequestFinish();
+
+    mpDataCollector->RequestFinish();
+
     /*if(mpViewer)
     {
         mpViewer->RequestFinish();
