@@ -29,9 +29,9 @@ If you use SEESys in an academic work, please cite:
 
 ```
 @inproceedings{SEESys24,
-  title={SEESys: online pose error estimation system for visual SLAM},
+  title={{SEESys}: online pose error estimation system for visual {SLAM}},
   author={Hu, Tianyi and Scargill, Tim and Yang, Fan and Chen, Ying and Lan, Guohao and Gorlatova, Maria},
-  booktitle={Proceedings of ACM SenSys 2024},
+  booktitle={Proceedings of ACM SenSys},
   year={2024}
  }
  ```
